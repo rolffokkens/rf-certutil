@@ -195,14 +195,14 @@ cond_sudo ()
 {
     [[ ${USER} == "root" ]] && die "Run $0 as normal user, not as root"
 
-    if [[ ${USER} == "certutil.local" ]]
+    if [[ ${USER} == "rf-certutil" ]]
     then
         [[ ${SUDO_USER} == "" ]] && die "Internal error, SUDO_USER"
         log "${SUDO_USER}" "$@"
         return 0
     fi
 
-    exec sudo -u certutil.local "$@"
+    exec sudo -u rf-certutil "$@"
 }
 
 render_ext_constraints ()
