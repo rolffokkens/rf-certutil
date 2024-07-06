@@ -4,6 +4,6 @@
 
 cond_sudo "$0" "$@"
 
-do_cre_ca_cert LDAP render_ext_constraints "${cfg_LDAP_CONSTRAINTS}"
+do_cre_subca_cert LDAP render_ext_constraints "${cfg_LDAP_CONSTRAINTS}"
 
 rm "${csrtmp}"

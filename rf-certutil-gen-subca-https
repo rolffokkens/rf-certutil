@@ -4,6 +4,6 @@
 
 cond_sudo "$0" "$@"
 
-do_cre_ca_cert HTTPS render_ext_constraints "${cfg_HTTPS_CONSTRAINTS}"
+do_cre_subca_cert HTTPS render_ext_constraints "${cfg_HTTPS_CONSTRAINTS}"
 
 rm "${csrtmp}"

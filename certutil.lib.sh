@@ -161,7 +161,7 @@ _gen_ca_crt ()
         -infiles "${_csrfile}"
 }
 
-do_cre_ca_cert ()
+do_cre_subca_cert ()
 {
     local _subname="$1"
     local _render_ext="$2"

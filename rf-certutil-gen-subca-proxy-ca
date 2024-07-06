@@ -4,6 +4,6 @@
 
 cond_sudo "$0" "$@"
 
-do_cre_ca_cert PROXY-CA render_ext_constraints ""
+do_cre_subca_cert PROXY-CA render_ext_constraints ""
 
 rm "${csrtmp}"
