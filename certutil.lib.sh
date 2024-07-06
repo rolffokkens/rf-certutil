@@ -119,7 +119,7 @@ do_cre_cert ()
     _gen_crt "${_subname}" "${_subject}" "${_render_ext}" "${_render_args}" "${_certpfx}" "${csrtmp}" "${_sep_chain}" || return 1
 }
 
-_gen_ca_csr ()
+_gen_subca_csr ()
 {
     local _subname="$1"
     local _keypfx="$2"
@@ -139,7 +139,7 @@ _gen_ca_csr ()
     chmod 600 "${_keyfile}"
 }
 
-_gen_ca_crt ()
+_gen_subca_crt ()
 {
     local _subname="$1"
     local _render_ext="$2"
@@ -173,11 +173,12 @@ do_cre_subca_cert ()
     local _subcacert="${_certpfx}.crt"
     local _subcachain="${_certpfx}.chain"
 
-    _gen_ca_csr "${_subname}" "${_keypfx}" "${csrtmp}"
-    _gen_ca_crt "${_subname}" "${_render_ext}" "${_render_args}" "${_certpfx}" "${csrtmp}"
+    _gen_subca_csr "${_subname}" "${_keypfx}" "${csrtmp}"
+    _gen_subca_crt "${_subname}" "${_render_ext}" "${_render_args}" "${_certpfx}" "${csrtmp}"
 
-                        > "${_subcachain}"
-    cat "${_subcacert}" > "${_subcachain}.full"
+    cat "${cacert}"                      > "${_subcachain}"
+    cat "${_subcacert}" "${_subcachain}" > "${_subcachain}.full"
+
 }
 
 get_cert_days ()
