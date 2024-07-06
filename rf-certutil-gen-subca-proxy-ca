@@ -1,0 +1,9 @@
+#!/bin/bash
+
+. /usr/share/rf-certutil/certutil.lib.sh
+
+cond_sudo "$0" "$@"
+
+do_cre_ca_cert PROXY-CA render_ext_constraints ""
+
+rm "${csrtmp}"

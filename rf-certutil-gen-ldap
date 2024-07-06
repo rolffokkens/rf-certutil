@@ -1,0 +1,65 @@
+#!/bin/bash
+
+. /usr/share/rf-certutil/certutil.lib.sh
+
+cond_sudo "$0" "$@"
+
+[[ $1 == "" ]] && die "Missing argument [DOMAIN]"
+
+_subject="$1"
+
+_render_subjectaltname ()
+{
+    local _subject="$1"
+    local _ip _name
+    local _sep=""
+
+    for _name in "${_subject}" ${cfg_LDAP_EXTRA}
+    do
+        _ip=$(host "${_name}." | awk '{ printf (",IP:%s", $NF)}'; exit ${PIPESTATUS[0]})
+
+         if [[ $? != 0 ]]
+         then
+             printf "Unable to resolve '%s'\n", "${_name}"
+             return 1
+         fi
+
+         printf "%sDNS:%s%s" "${_sep}" "${_name}" "${_ip}"
+         _sep=","
+    done
+}
+
+_do_render_ext ()
+{
+    local _san="$1"
+cat << EOF
+[ th_ext ]
+basicConstraints=CA:FALSE
+subjectAltName=${_san}
+EOF
+}
+
+_main ()
+{
+    local _subject="$1"
+
+    [[ "${_subject}" != *[.]*[.]* ]] && die "Argument [%s] is not FQDN" "${_subject}"
+
+    local _san=$(_render_subjectaltname "${_subject}") || return 1
+    local _tmpdir=$(mktemp -d /tmp/crt-XXXXXX)
+    local _certdir="${_tmpdir}/etc/openldap/certs"
+    local _dsttar="/tmp/${file_pfx}LDAP-${_subject}.tgz"
+
+    mkdir -p "${_certdir}"
+
+    do_cre_cert LDAP "${_subject}" _do_render_ext "${_san}" "${_certdir}" "${_certdir}" server 1
+
+    echo "Creating '${_dsttar}'"
+
+    tar czf "${_dsttar}" -C "${_tmpdir}" "etc/openldap/certs"
+
+    rm -Rf "${_tmpdir}"
+    rm "${csrtmp}"
+}
+
+_main "${_subject}"

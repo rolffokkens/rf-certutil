@@ -1,0 +1,75 @@
+#!/bin/bash
+
+. /usr/share/rf-certutil/certutil.lib.sh
+
+cond_sudo "$0" "$@"
+
+[[ $1 == "" ]] && die "Missing argument [SUBNAME]"
+
+_subname="$1"
+
+_render_extensions ()
+{
+cat << EOF
+[ th_proxy_proxyca ]
+subjectKeyIdentifier=hash
+authorityKeyIdentifier=keyid:always,issuer
+basicConstraints = CA:TRUE,pathlen:0
+EOF
+}
+
+_main ()
+{
+    local _subname="$1"
+
+    local _proxycakey="${keydir}/${file_pfx}PROXY-CA-CA.key"
+    local _proxycacert="${certdir}/${file_pfx}PROXY-CA-CA.crt"
+    local _proxycachain="${certdir}/${file_pfx}PROXY-CA-CA.chain.full"
+
+    local _keyarg="-keyout"
+    [[ -s ${_subcakey} ]] && _keyarg="-key"
+
+    local _certtmp=$(mktemp /tmp/csr-XXXXXX)
+    local _tmpdir=$(mktemp -d /tmp/crt-XXXXXX)
+    local _certdir="${_tmpdir}/etc/squid"
+    local _dsttar="/tmp/${file_pfx}PROXY-${_subname}-CA.tgz"
+
+    local _subcakey="${_certdir}/${file_pfx}${_subname}-CA.key"
+    local _subcacert="${_certdir}/${file_pfx}${_subname}-CA.crt"
+
+    mkdir -p "${_certdir}"
+
+    VARDIR="${vardir}" openssl req \
+        -new \
+        -nodes \
+        "${_keyarg}" "${_subcakey}" \
+        -out "${csrtmp}" \
+        -subj "${cfg_CERT_SUBJECT_PFX}/CN=${cfg_CA_CN} PROXY ${_subname} ${cert_class_space}CA"
+
+    chmod 600 "${_subcakey}"
+
+    VARDIR="${vardir}" openssl ca \
+        -config "${libdir}/openssl-ca.cnf" \
+        -policy policy_anything \
+        -notext \
+        -batch \
+        -days $(get_cert_days $((61))) \
+        -extfile <(_render_extensions) \
+        -extensions th_proxy_proxyca \
+        -keyfile "${_proxycakey}" \
+        -cert "${_proxycacert}" \
+        -out "${_certtmp}" \
+        -infiles "${csrtmp}"
+
+    cat "${_certtmp}" "${_proxycachain}" > "${_subcacert}"
+
+    echo "Creating '${_dsttar}'"
+
+    tar czf "${_dsttar}" --owner=root --group=root -C "${_tmpdir}" "etc/squid/"
+
+    rm -Rf "${_tmpdir}"
+    rm "${_certtmp}"
+    rm "${csrtmp}"
+}
+
+_main "${_subname}"

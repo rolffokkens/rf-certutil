@@ -1,0 +1,35 @@
+#!/bin/bash
+
+. /usr/share/rf-certutil/certutil.lib.sh
+
+cond_sudo "$0" "$@"
+
+touch "${mgmtdir}/index.txt"
+
+_keyarg="-keyout"
+[[ -e ${cakey} ]] && _keyarg="-key"
+
+_index="${vardir}/mgmt/index.txt"
+[[ -e ${_index} ]] || touch "${_index}"
+
+VARDIR="${vardir}" openssl req \
+    -config "${libdir}/openssl-req.cnf" \
+    -new "${_keyarg}" "${cakey}" \
+    -out "${csrtmp}" \
+    -subj "${cfg_CERT_SUBJECT_PFX}/CN=${cfg_CA_CN} ${cert_class_space}CA"
+
+chmod 600 "${cakey}"
+
+VARDIR="${vardir}" openssl ca \
+    -config "${libdir}/openssl-ca.cnf" \
+    -create_serial \
+    -notext \
+    -batch \
+    -days $(get_cert_days $((4*365))) \
+    -selfsign \
+    -extensions v3_ca \
+    -out "${cacert}" \
+    -keyfile "${cakey}" \
+    -infiles "${csrtmp}"
+
+rm "${csrtmp}"

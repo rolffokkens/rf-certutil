@@ -1,0 +1,50 @@
+#!/bin/bash
+
+. /usr/share/rf-certutil/certutil.lib.sh
+
+cond_sudo "$0" "$@"
+
+[[ $1 == "" ]] && die "Missing argument [CN]"
+[[ $2 == "" ]] && die "Missing argument [ALTNAMES]"
+
+_subject="$1"
+_subjectaltname="$2"
+
+_do_render_ext ()
+{
+    local _san="$1"
+cat << EOF
+[ th_ext ]
+basicConstraints=CA:FALSE
+subjectAltName=${_san}
+EOF
+}
+
+_main ()
+{
+    local _subject="$1"
+    local _subjectaltname="$2"
+
+    [[ "${_subject}" != *[.]*[.]* ]] && die "Argument [%s] is not FQDN" "${_subject}"
+
+    local _san="DNS:$(sed 's/,/,DNS:/g' <<< ${_subject},${_subjectaltname})"
+    local _tmpdir=$(mktemp -d /tmp/crt-XXXXXX)
+    local _topdir="var/lib/salt/standard/base/states/states/pki"
+    local _certdir="${_tmpdir}/${_topdir}/certs"
+    local _keydir="${_tmpdir}/${_topdir}/keys"
+    local _dsttar="/tmp/${file_pfx}HTTPS-${_subject}.tgz"
+    local _filename=$(sed 's/[.]/_/g;s/$/_sha256/' <<< "${_subject}")
+
+    mkdir -p "${_certdir}" "${_keydir}"
+
+    do_cre_cert HTTPS "${_subject}" _do_render_ext "${_san}" "${_keydir}" "${_certdir}" "${_filename}" 1
+
+    echo "Creating '${_dsttar}'"
+
+    tar czf "${_dsttar}" -C "${_tmpdir}" "${_topdir}/certs" "${_topdir}/keys"
+
+    rm -Rf "${_tmpdir}"
+    rm "${csrtmp}"
+}
+
+_main "${_subject}" "${_subjectaltname}"

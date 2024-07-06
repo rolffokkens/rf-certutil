@@ -1,0 +1,161 @@
+#!/bin/bash
+
+. /usr/share/rf-certutil/certutil.lib.sh
+
+cond_sudo "$0" "$@"
+
+[[ $1 == "" ]] && die "Missing argument [LDAPUID]"
+
+_ldapuid="$1"
+_cfgname="$2"
+
+_cfgdir="${cfgdir}/vpn-client"
+
+_do_render_ext ()
+{
+    local _dummy="$1"
+cat << EOF
+[ th_ext ]
+basicConstraints=CA:FALSE
+nsCertType=client
+nsComment="OpenSSL Generated Certificate"
+subjectKeyIdentifier=hash
+authorityKeyIdentifier=keyid,issuer
+keyUsage=digitalSignature
+extendedKeyUsage=clientAuth
+EOF
+}
+
+ldap_lookup ()
+{
+    ldapsearch -Z -x -b "ou=People,dc=example,dc=com" -H ldap://ldap.priv.example.com "uid=$1" \
+    | sed -n 's/\(^[^: ]*\)\( *: *\)\([^ ].*$\)/local _LDAP_\1="\3"/p'
+}
+
+_mail_body ()
+{
+    local _LDAP_cn="$1"
+    local _LDAP_mail="$2"
+    local _LDAP_mobile="$3"
+    local _LDAP_uid="$4"
+    local _mailtpl="$5"
+    local _boundary="=====================_60270782==_"
+
+    shift 5
+
+    cat "${_mailtpl}" \
+    | sed "s/@@LDAP_CN@@/${_LDAP_cn}/" \
+    | sed "s/@@TO@@/${_LDAP_mail}/" \
+    | sed "s/@@LDAP_MOBILE@@/${_LDAP_mobile}/" \
+    | sed "s/@@LDAP_UID@@/${_LDAP_uid}/" \
+    | sed "s/@@BOUNDARY@@/${_boundary}/"
+
+    while [ "$1" != "" ]
+    do
+        echo
+        echo "--${_boundary}"
+        echo "Content-Type: application/octet-stream"
+        echo "Content-Transfer-Encoding: base64"
+        echo "Content-Disposition: attachment; filename=\"${1%:*}\""
+        echo
+        base64 "${1#*:}"
+        shift
+    done
+
+    echo "--${_boundary}--"
+}
+
+_gen_sms_msg ()
+{
+    local _zippwd="$1"
+    local _smstpl="$2"
+
+    cat "${_smstpl}" \
+    | sed "s/@@ZIPPWD@@/${_zippwd}/" \
+    | sed "s/@@DEST@@/${_dest}/"
+}
+
+_send_sms ()
+{
+    local _uid="$1"
+    local _zippwd="$2"
+    local _smstpl="$3"
+    local _msg
+
+    _msg=$(_gen_sms_msg "${_zippwd}" "${_smstpl}")
+
+    curl -s -H "TH-Sms-User: ${_uid}" -H "TH-Sms-Class: certificate" -H "TH-Sms-Message: ${_msg}" https://sms.example.com/send
+}
+
+_cre_cert_zip ()
+{
+    local _ldapuid="$1"
+    local _zippwd="$2"
+    local _dstzip="$3"
+    local _tmpdir=$(mktemp -d /tmp/crt-XXXXXX)
+    local _certdir="${file_pfx}priv"
+    local _certpath="${_tmpdir}/${_certdir}"
+
+    mkdir -p "${_certpath}"
+
+    do_cre_cert VPN "${_ldapuid}" _do_render_ext "" "${_certpath}" "${_certpath}" priv 0
+
+    cat "${libdir}/old-vpn-ca.crt" "${cacert}" > "${_certpath}/$(basename ${cacert})"
+
+    echo "Creating '${_dstzip}'"
+    (cd "${_tmpdir}"; zip -q -r -P "${_zippwd}" - .) > "${_dstzip}"
+
+    rm -Rf "${_tmpdir}"
+    rm "${csrtmp}"
+}
+
+_main ()
+{
+    local _ldapuid="$1"
+    local _cfgname="$2"
+    local _maildom _tmpdir _mailtpl _smstpl _zippwd _dstzip _basename
+
+    eval $(ldap_lookup "${_ldapuid}")
+
+    [[ $_LDAP_uid    == "" ]] && echo "Unknown LDAP uid"                              >&2 && return 1
+    [[ $_LDAP_mail   == "" ]] && echo "No emailAddress known for uid=$LDAPUID"        >&2 && return 1
+    [[ $_LDAP_cn     == "" ]] && echo "No commonName known for uid=$LDAPUID"          >&2 && return 1
+    [[ $_LDAP_mobile == "" ]] && echo "No mobile phone number known for uid=$LDAPUID" >&2 && return 1
+
+    _maildom="${_LDAP_mail#*@}"
+
+    [[ $_cfgname == "" ]] && _cfgname="${_maildom}"
+    _cfgfile="${_cfgdir}/${_cfgname}.conf"
+
+    if [[ ! -e ${_cfgfile} ]]
+    then
+        echo "No config file \"${_cfgfile}\" available" >&2
+        return 1
+    fi
+
+    eval $(sed 's/^/local _CFG_/' "${_cfgdir}/default.conf")
+    eval $(sed 's/^/local _CFG_/' "${_cfgfile}")
+
+    _mailtpl="${_cfgdir}/${_CFG_mail_template}.mail.tpl"
+
+    [ ! -e "${_mailtpl}" ] && die "No mail template file \"${_mailtpl}\" available"
+
+    _smstpl="${_cfgdir}/${_CFG_sms_template}.sms.tpl"
+
+    [ ! -e "${_smstpl}" ] && die "No sms template file \"${_smstpl}\" available"
+
+    _tmpdir=$(mktemp -d /tmp/vpn-XXXXXX)
+    _zippwd=$(pwgen 10 1)
+    _basename="${file_pfx}VPN-${_ldapuid}.zip"
+    _dstzip="${_tmpdir}/${_basename}"
+
+    _cre_cert_zip "${_ldapuid}" "${_zippwd}" "${_dstzip}"
+
+    _mail_body "${_LDAP_cn}" "${_LDAP_mail}" "${_LDAP_mobile}" "${_LDAP_uid}" "${_mailtpl}" "${_basename}:${_dstzip}" | /sbin/sendmail -t -f "Openvpn <admin@example.com>" "${_LDAP_mail}"
+
+    _send_sms "${_LDAP_uid}" "${_zippwd}" "${_smstpl}"
+
+    echo rm -Rf "${_tmpdir}"
+}
+
+_main "${_ldapuid}" "${_cfgname}"

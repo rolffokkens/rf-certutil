@@ -1,0 +1,46 @@
+#!/bin/bash
+
+. /usr/share/rf-certutil/certutil.lib.sh
+
+cond_sudo "$0" "$@"
+
+[[ $1 == "" ]] && die "Missing argument [DOMAIN]"
+
+_subject="$1"
+
+_do_render_ext ()
+{
+    local _subject="$1"
+cat << EOF
+[ th_ext ]
+basicConstraints=CA:FALSE
+subjectAltName=DNS:${_subject}
+nsCertType=server
+nsComment="OpenSSL Generated Certificate"
+subjectKeyIdentifier=hash
+authorityKeyIdentifier=keyid,issuer
+keyUsage = digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
+EOF
+}
+
+_main ()
+{
+    local _subject="$1"
+    local _tmpdir=$(mktemp -d /tmp/crt-XXXXXX)
+    local _certdir="${_tmpdir}/etc/openvpn/certs"
+    local _dsttar="/tmp/${file_pfx}VPN-${_subject}.tgz"
+
+    mkdir -p "${_certdir}"
+
+    do_cre_cert VPN "${_subject}" _do_render_ext "${_subject}" "${_certdir}" "${_certdir}" server 0
+
+    echo "Creating '${_dsttar}'"
+
+    tar czf "${_dsttar}" -C "${_tmpdir}" "etc/openvpn/certs"
+
+    rm -Rf "${_tmpdir}"
+    rm "${csrtmp}"
+}
+
+_main "${_subject}"
