@@ -4,13 +4,14 @@
 
 cond_sudo "$0" "$@"
 
-touch "${mgmtdir}/index.txt"
-
 _keyarg="-keyout"
 [[ -e ${cakey} ]] && _keyarg="-key"
 
-_index="${vardir}/mgmt/index.txt"
+_index="${mgmtdir}/index.txt"
 [[ -e ${_index} ]] || touch "${_index}"
+
+_indexattr="${mgmtdir}/index.txt.attr"
+[[ -e ${_indexattr} ]] || cp "${libdir}/index.txt.attr" "${_indexattr}"
 
 VARDIR="${vardir}" openssl req \
     -config "${libdir}/openssl-req.cnf" \
