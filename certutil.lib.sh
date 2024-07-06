@@ -178,7 +178,6 @@ do_cre_subca_cert ()
 
     cat "${cacert}"                      > "${_subcachain}"
     cat "${_subcacert}" "${_subcachain}" > "${_subcachain}.full"
-
 }
 
 get_cert_days ()
