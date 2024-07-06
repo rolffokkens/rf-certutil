@@ -1,5 +1,3 @@
-#!/bin/bash
-
 cfgdir="/etc/rf-certutil"
 _conf="${cfgdir}/rf-certutil.conf"
 eval $(gawk '/^[A-Z]/ {print "cfg_" $0;}' ${_conf} | sed 's/[*]/\*/g')
@@ -86,7 +84,7 @@ _gen_crt ()
         -policy policy_anything \
         -batch \
         -notext \
-        -days $(get_cert_days $((1*365))) \
+        -days $(get_cert_days "${cfg_CERT_DAYS:-$((1*365))}") \
         -keyfile "${_subcakey}"  \
         -cert "${_subcacert}" \
         -out "${_certtmp}" \
@@ -156,7 +154,7 @@ _gen_ca_crt ()
         -policy policy_anything \
         -notext \
         -batch \
-        -days $(get_cert_days $((2*365))) \
+        -days $(get_cert_days "${cfg_CERT_SUBCA_DAYS:-$((5*365))}") \
         -keyfile "${cakey}" \
         -cert "${cacert}" \
         -out "${_certpfx}.crt" \
