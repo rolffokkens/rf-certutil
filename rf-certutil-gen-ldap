@@ -16,16 +16,16 @@ _render_subjectaltname ()
 
     for _name in "${_subject}" ${cfg_LDAP_EXTRA}
     do
-        _ip=$(host "${_name}." | awk '{ printf (",IP:%s", $NF)}'; exit ${PIPESTATUS[0]})
+        _ip=$(host "${_name}." | awk '{ if ($NF ~ "192[.]168[.].*") printf (",IP:%s", $NF)}'; exit ${PIPESTATUS[0]})
 
-         if [[ $? != 0 ]]
-         then
-             printf "Unable to resolve '%s'\n", "${_name}"
-             return 1
-         fi
+        if [[ $? != 0 ]]
+        then
+            printf "Unable to resolve '%s'\n", "${_name}"
+            return 1
+        fi
 
-         printf "%sDNS:%s%s" "${_sep}" "${_name}" "${_ip}"
-         _sep=","
+        printf "%sDNS:%s%s" "${_sep}" "${_name}" "${_ip}"
+        _sep=","
     done
 }
 
